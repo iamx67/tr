@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0c0e">
+<title>Копилки</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;background:#0b0c0e;color:#eee;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{padding-bottom:88px}
+button,input,select{font:inherit}.wrap{max-width:760px;margin:auto;padding:18px 16px}.top{display:flex;justify-content:space-between;align-items:end;border-bottom:1px solid #303238;padding-bottom:14px;margin-bottom:14px}
+h1,h2,h3,p{margin:0}h1{font-size:28px;letter-spacing:-.5px}.sub{color:#858a93;font-size:12px;margin-top:4px}
+nav{position:fixed;z-index:20;bottom:0;left:0;right:0;background:#101114;border-top:1px solid #303238;display:grid;grid-template-columns:repeat(5,1fr);padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
+nav button{background:none;border:0;color:#777b83;font-size:11px;padding:7px 2px}nav button b{display:block;font-size:19px;margin-bottom:2px}nav button.on{color:#fff}
+.card{border:1px solid #303238;background:#111317;padding:14px;margin:10px 0}.row{display:flex;gap:10px;align-items:center}.between{justify-content:space-between}.icon{width:46px;height:46px;display:grid;place-items:center;background:#1a1d22;border-left:4px solid var(--c);font-size:24px;flex:none}.money{font-size:22px;font-weight:700}.muted{color:#888d96}.small{font-size:12px}.btn{border:1px solid #4b5059;background:#191c21;color:#fff;padding:11px 13px;border-radius:0}.primary{background:#e8e8e8;color:#0b0c0e;border-color:#e8e8e8;font-weight:700}.danger{border-color:#71363a;color:#ff9b9b}.big{width:100%;padding:16px;font-size:16px;margin:8px 0 14px}
+.progress{height:8px;background:#292c31;margin:10px 0}.progress i{display:block;height:100%;background:var(--c);width:0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+input,select{width:100%;background:#0d0f12;border:1px solid #343840;color:#eee;padding:11px;border-radius:0;outline:none}label{font-size:11px;color:#858a93;display:block;margin:10px 0 5px}
+.modal{position:fixed;inset:0;background:#000b;z-index:50;display:none;align-items:flex-end}.modal.show{display:flex}.sheet{width:100%;max-height:90vh;overflow:auto;background:#111317;border-top:1px solid #444;padding:18px}.icons{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}.ico{height:42px;background:#1b1e23;border:1px solid #30343b;color:#fff;font-size:20px}.ico.sel{border-color:#fff}.colors{display:flex;gap:8px;flex-wrap:wrap}.clr{width:28px;height:28px;border:2px solid transparent}.clr.sel{border-color:#fff}
+.hidden{display:none}.tabs{display:flex;gap:0;margin:10px 0}.tabs button{flex:1;background:#15171b;color:#777;border:1px solid #303238;padding:10px}.tabs button.on{color:#fff;border-color:#777}.stat{font-size:12px;color:#9297a0}.barrow{display:grid;grid-template-columns:78px 1fr 75px;gap:8px;align-items:center;margin:8px 0;font-size:12px}.bar{height:14px;background:#25282d}.bar i{display:block;height:100%;background:#d8d8d8}.notice{border-left:3px solid #ddd;padding:10px;background:#191b20;font-size:13px;margin:10px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top"><div><h1 id="title">Копилки</h1><div class="sub">Локальный финансовый трекер</div></div><div id="total" class="money">0 ₽</div></header>
+<main id="app"></main>
+</div>
+<nav>
+<button data-page="pots" class="on"><b>▣</b>Копилки</button>
+<button data-page="goals"><b>◎</b>Цели</button>
+<button data-page="money"><b>±</b>Движение</button>
+<button data-page="limits"><b>▤</b>Лимиты</button>
+<button data-page="more"><b>⋯</b>Ещё</button>
+</nav>
+
+<div id="modal" class="modal"><div class="sheet" id="sheet"></div></div>
+
+<script>
+const KEY='money_tracker_v1';
+const icons=['▣','◈','★','♥','◆','●','▲','☀','☾','⚡','♟','✈','⌂','🎓','🚗','🎮','🎁','💻','📱','🛡','💰','🏠','🐱','🌿','🍔','☕','🎵','📚','🏖','💎','🔧','🛒'];
+const colors=['#d8d8d8','#ff6b6b','#ff9f43','#ffd166','#7bd88f','#4dd4ac','#55b7ff','#8b8cff','#c084fc','#f472b6'];
+let db=JSON.parse(localStorage.getItem(KEY)||'null')||{pots:[],goals:[],tx:[],limits:[]};
+let page='pots';
+const save=()=>{localStorage.setItem(KEY,JSON.stringify(db));render()};
+const fmt=n=>new Intl.NumberFormat('ru-RU').format(Math.round(n))+' ₽';
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+function month(v=new Date()){let d=new Date(v);return d.toISOString().slice(0,7)}
+function closeModal(){document.getElementById('modal').classList.remove('show')}
+function modal(html){document.getElementById('sheet').innerHTML=html;document.getElementById('modal').classList.add('show')}
+document.getElementById('modal').onclick=e=>{if(e.target.id==='modal')closeModal()};
+
+function render(){
+ document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x.dataset.page===page));
+ document.getElementById('title').textContent={pots:'Копилки',goals:'Цели',money:'Доходы и расходы',limits:'Лимиты',more:'Настройки'}[page];
+ let total=db.pots.reduce((s,p)=>s+p.amount,0)+db.goals.reduce((s,g)=>s+g.amount,0);
+ document.getElementById('total').textContent=fmt(total);
+ document.getElementById('app').innerHTML=({pots:potsPage,goals:goalsPage,money:moneyPage,limits:limitsPage,more:morePage}[page])();
+}
+function potsPage(){
+ let sum=db.pots.reduce((s,p)=>s+p.amount,0);
+ return `<button class="btn primary big" onclick="incomeSplit()">+ РАСПРЕДЕЛИТЬ ДОХОД</button>
+ <button class="btn big" onclick="addPot()">＋ Новая копилка</button>
+ <div class="notice">Всего в копилках: <b>${fmt(sum)}</b></div>
+ ${db.pots.length?db.pots.map(p=>`<div class="card" style="--c:${p.color}">
+ <div class="row between"><div class="row"><div class="icon">${p.icon}</div><div><b>${esc(p.name)}</b><div class="small muted">${p.percent||0}% от дохода</div></div></div><div class="money">${fmt(p.amount)}</div></div>
+ <div class="row" style="margin-top:12px"><button class="btn" onclick="addToPot('${p.id}')">+ Пополнить</button><button class="btn" onclick="editPot('${p.id}')">Изменить</button><button class="btn danger" onclick="delPot('${p.id}')">×</button></div></div>`).join(''):'<div class="card muted">Создай первую копилку.</div>'}`;
+}
+function goalsPage(){
+ return `<button class="btn primary big" onclick="addGoal()">＋ Новая цель</button>
+ ${db.goals.length?db.goals.map(g=>{let pr=Math.min(100,g.target?g.amount/g.target*100:0);return `<div class="card" style="--c:${g.color}">
+ <div class="row between"><div class="row"><div class="icon">${g.icon}</div><div><b>${esc(g.name)}</b><div class="small muted">до ${g.date||'—'}</div></div></div><b>${pr.toFixed(0)}%</b></div>
+ <div class="progress"><i style="width:${pr}%"></i></div><div class="row between"><span>${fmt(g.amount)} из ${fmt(g.target)}</span><span class="small muted">${fmt(Math.max(0,g.target-g.amount))} осталось</span></div>
+ <div class="row" style="margin-top:12px"><button class="btn" onclick="addToGoal('${g.id}')">+ Пополнить</button><button class="btn" onclick="editGoal('${g.id}')">Изменить</button><button class="btn danger" onclick="delGoal('${g.id}')">×</button></div></div>`}).join(''):'<div class="card muted">Здесь будут цели с суммой, сроком и прогрессом.</div>'}`;
+}
+function moneyPage(){
+ let m=month();let tx=db.tx.filter(t=>t.date.startsWith(m)), inc=tx.filter(t=>t.type==='in').reduce((s,t)=>s+t.amount,0), out=tx.filter(t=>t.type==='out').reduce((s,t)=>s+t.amount,0);
+ let cats={};tx.forEach(t=>cats[t.cat]=(cats[t.cat]||0)+t.amount);let max=Math.max(1,...Object.values(cats));
+ return `<div class="tabs"><button class="on" id="tm">${m}</button><button onclick="chooseMonth()">Выбрать месяц</button></div>
+ <div class="grid"><div class="card"><div class="stat">ДОХОДЫ</div><b>${fmt(inc)}</b></div><div class="card"><div class="stat">РАСХОДЫ</div><b>${fmt(out)}</b></div></div>
+ <button class="btn primary big" onclick="addTx('in')">＋ Доход</button><button class="btn big" onclick="addTx('out')">－ Расход</button>
+ <div class="card"><b>Категории за ${m}</b>${Object.keys(cats).length?Object.entries(cats).map(([c,v])=>`<div class="barrow"><span>${esc(c)}</span><div class="bar"><i style="width:${v/max*100}%"></i></div><span>${fmt(v)}</span></div>`).join(''):'<p class="muted small" style="margin-top:10px">Нет операций за месяц.</p>'}</div>
+ <div class="card"><b>Операции</b>${tx.slice().reverse().map(t=>`<div class="row between" style="padding:10px 0;border-bottom:1px solid #25282d"><div><b>${esc(t.cat)}</b><div class="small muted">${t.date} · ${esc(t.note||'')}</div></div><span>${t.type==='in'?'+':'−'}${fmt(t.amount)}</span></div>`).join('')}</div>`;
+}
+function limitsPage(){
+ let m=month();let tx=db.tx.filter(t=>t.type==='out'&&t.date.startsWith(m)), spent={};tx.forEach(t=>spent[t.cat]=(spent[t.cat]||0)+t.amount);
+ return `<button class="btn primary big" onclick="addLimit()">＋ Новый лимит</button><div class="notice">Лимиты сравниваются автоматически с расходами за текущий месяц.</div>
+ ${db.limits.length?db.limits.map(l=>{let s=spent[l.cat]||0,p=Math.min(100,s/l.amount*100);return `<div class="card"><div class="row between"><b>${esc(l.cat)}</b><span>${fmt(s)} / ${fmt(l.amount)}</span></div><div class="progress"><i style="width:${p}%;background:${p>100?'#ff6b6b':'#d8d8d8'}"></i></div><div class="row between small"><span>${p>100?'ПРЕВЫШЕНИЕ':'Осталось '+fmt(l.amount-s)}</span><button class="btn danger" onclick="delLimit('${l.id}')">×</button></div></div>`}).join(''):'<div class="card muted">Создай лимит, например «Еда — 30 000 ₽ в месяц».</div>'}`;
+}
+function morePage(){
+ return `<div class="card"><b>Данные</b><p class="muted small" style="margin:8px 0 14px">Все данные хранятся только в браузере этого телефона (localStorage).</p><button class="btn" onclick="exportData()">Экспорт JSON</button> <button class="btn" onclick="importData()">Импорт JSON</button></div>
+ <div class="card"><b>Сброс</b><p class="muted small" style="margin:8px 0 14px">Удалит все копилки, цели, операции и лимиты.</p><button class="btn danger" onclick="if(confirm('Удалить всё?')){db={pots:[],goals:[],tx:[],limits:[]};save()}">Удалить все данные</button></div>`;
+}
+function iconPicker(sel='▣',col='#d8d8d8'){return `<label>Иконка</label><div class="icons">${icons.map(i=>`<button type="button" class="ico ${i===sel?'sel':''}" onclick="pickIcon(this)">${i}</button>`).join('')}</div><input type="hidden" id="ficon" value="${esc(sel)}"><label>Цвет</label><div class="colors">${colors.map(c=>`<button type="button" class="clr ${c===col?'sel':''}" style="background:${c}" onclick="pickColor(this)" data-c="${c}"></button>`).join('')}</div><input type="hidden" id="fcolor" value="${col}">`}
+function pickIcon(b){document.querySelectorAll('.ico').forEach(x=>x.classList.remove('sel'));b.classList.add('sel');document.getElementById('ficon').value=b.textContent}
+function pickColor(b){document.querySelectorAll('.clr').forEach(x=>x.classList.remove('sel'));b.classList.add('sel');document.getElementById('fcolor').value=b.dataset.c}
+function addPot(id=null){
+ let p=id?db.pots.find(x=>x.id===id):{name:'',amount:0,percent:0,icon:'▣',color:'#d8d8d8'};
+ modal(`<h2>${id?'Изменить':'Новая'} копилка</h2><label>Название</label><input id="fname" value="${esc(p.name)}" placeholder="Подушка безопасности"><div class="grid"><div><label>Процент автоматического дохода</label><input id="fp" type="number" min="0" max="100" step="1" value="${p.percent||0}"></div><div><label>Текущая сумма</label><input id="fa" type="number" min="0" value="${p.amount||0}"></div></div>${iconPicker(p.icon,p.color)}<button class="btn primary big" onclick="savePot('${id||''}')">Сохранить</button><button class="btn big" onclick="closeModal()">Отмена</button>`);
+}
+function savePot(id){let p={id:id||crypto.randomUUID(),name:document.getElementById('fname').value.trim()||'Копилка',amount:+document.getElementById('fa').value||0,percent:+document.getElementById('fp').value||0,icon:document.getElementById('ficon').value,color:document.getElementById('fcolor').value};if(id)Object.assign(db.pots.find(x=>x.id===id),p);else db.pots.push(p);closeModal();save()}
+function editPot(id){addPot(id)} function delPot(id){if(confirm('Удалить копилку?')){db.pots=db.pots.filter(x=>x.id!==id);save()}}
+function addToPot(id){modal(`<h2>Пополнить копилку</h2><label>Сумма</label><input id="amt" type="number" min="0" placeholder="10 000"><label>Дата</label><input id="dt" type="date" value="${new Date().toISOString().slice(0,10)}"><button class="btn primary big" onclick="changePot('${id}',1)">Добавить</button>`)}
+function changePot(id,sign){let a=+document.getElementById('amt').value||0;if(a<=0)return;db.pots.find(x=>x.id===id).amount=Math.max(0,db.pots.find(x=>x.id===id).amount+a*sign);closeModal();save()}
+function incomeSplit(){if(!db.pots.length)return addPot();modal(`<h2>Распределить доход</h2><p class="muted small">Проценты копилок: ${db.pots.map(p=>esc(p.name)+' '+p.percent+'%').join(' · ')}</p><label>Доход</label><input id="splitamt" type="number" placeholder="100 000"><button class="btn primary big" onclick="splitNow()">Распределить</button>`)}
+function splitNow(){let a=+document.getElementById('splitamt').value||0,total=db.pots.reduce((s,p)=>s+p.percent,0);if(!a||total>100){alert(total>100?'Сумма процентов больше 100%.':'Введите доход.');return}db.pots.forEach(p=>p.amount+=a*p.percent/100);closeModal();save()}
+function addGoal(id=null){let g=id?db.goals.find(x=>x.id===id):{name:'',amount:0,target:100000,date:'',icon:'◎',color:'#d8d8d8'};modal(`<h2>${id?'Изменить':'Новая'} цель</h2><label>Название</label><input id="gname" value="${esc(g.name)}"><div class="grid"><div><label>Цель</label><input id="gt" type="number" value="${g.target}"></div><div><label>Накоплено</label><input id="ga" type="number" value="${g.amount}"></div></div><label>Срок</label><input id="gd" type="date" value="${g.date||''}">${iconPicker(g.icon,g.color)}<button class="btn primary big" onclick="saveGoal('${id||''}')">Сохранить</button>`)}
+function saveGoal(id){let g={id:id||crypto.randomUUID(),name:document.getElementById('gname').value.trim()||'Цель',target:+document.getElementById('gt').value||0,amount:+document.getElementById('ga').value||0,date:document.getElementById('gd').value,icon:document.getElementById('ficon').value,color:document.getElementById('fcolor').value};if(id)Object.assign(db.goals.find(x=>x.id===id),g);else db.goals.push(g);closeModal();save()}
+function editGoal(id){addGoal(id)}function delGoal(id){if(confirm('Удалить цель?')){db.goals=db.goals.filter(x=>x.id!==id);save()}}
+function addToGoal(id){modal(`<h2>Пополнить цель</h2><label>Сумма</label><input id="gadd" type="number"><button class="btn primary big" onclick="let a=+document.getElementById('gadd').value||0;db.goals.find(x=>x.id==='${id}').amount+=a;closeModal();save()">Добавить</button>`)}
+function addTx(type){let today=new Date().toISOString().slice(0,10);modal(`<h2>${type==='in'?'Новый доход':'Новый расход'}</h2><label>Сумма</label><input id="ta" type="number" min="0"><label>Категория</label><input id="tc" list="cats" placeholder="${type==='in'?'Зарплата':'Еда'}"><datalist id="cats">${['Зарплата','Подработка','Подарки','Еда','Транспорт','Жильё','Покупки','Развлечения','Здоровье','Связь','Другое'].map(x=>`<option>${x}</option>`).join('')}</datalist><label>Дата</label><input id="td" type="date" value="${today}"><label>Комментарий</label><input id="tn"><button class="btn primary big" onclick="saveTx('${type}')">Сохранить</button>`)}
+function saveTx(type){let a=+ta.value||0;if(!a)return;db.tx.push({id:crypto.randomUUID(),type,amount:a,cat:tc.value.trim()||'Другое',date:td.value,note:tn.value});closeModal();save()}
+function chooseMonth(){modal(`<h2>Месяц</h2><label>Выбери месяц</label><input id="cm" type="month" value="${month()}"><button class="btn primary big" onclick="let v=cm.value;closeModal();document.getElementById('app').dataset.month=v;renderMoneyMonth(v)">Готово</button>`)}
+function renderMoneyMonth(m){let old=month;month=()=>m;render();month=old}
+function addLimit(){modal(`<h2>Новый лимит</h2><label>Категория</label><input id="lc" list="lcats" placeholder="Еда"><datalist id="lcats">${['Еда','Транспорт','Жильё','Покупки','Развлечения','Здоровье','Связь','Другое'].map(x=>`<option>${x}</option>`).join('')}</datalist><label>Лимит на месяц</label><input id="la" type="number" min="0"><button class="btn primary big" onclick="let c=lc.value.trim()||'Другое',a=+la.value||0;if(a){db.limits.push({id:crypto.randomUUID(),cat:c,amount:a});closeModal();save()}">Сохранить</button>`)}
+function delLimit(id){db.limits=db.limits.filter(x=>x.id!==id);save()}
+function exportData(){let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(db,null,2)],{type:'application/json'}));a.download='kopilki-backup.json';a.click()}
+function importData(){let i=document.createElement('input');i.type='file';i.accept='.json';i.onchange=async()=>{try{db=JSON.parse(await i.files[0].text());save()}catch(e){alert('Не удалось импортировать файл')}};i.click()}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{page=b.dataset.page;render()});
+render();
+</script>
+</body>
+</html>
